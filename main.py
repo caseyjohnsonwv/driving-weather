@@ -5,50 +5,20 @@ import pytz
 import requests
 from tzwhere.tzwhere import tzwhere
 import env
+from objects import Waypoint, WeatherCode
 
 
-class Waypoint:
-    def __init__(self, latitude, longitude):
-        self.latitude = latitude
-        self.longitude = longitude
-        self.nickname = None
-        self.eta_utc = None
-        self.eta_tz = None
-        self.distance = -1
-        self.distance_percentage = -1
-        self.temperature_degf = -1
-        self.precipitation_in = -1
-        self.visiblity_mi = -1
-        self.windspeed_mph = -1
-        self.windgusts_mph = -1
-
-    def __repr__(self):
-        return f"{self.eta_tz.strftime('%m/%d %H:00')} - [ {self.temperature_degf:.0f}F | {self.precipitation_in:.1f}\" | {self.windspeed_mph:.0f}/{self.windgusts_mph:.0f}mph\t| {self.visiblity_mi:.1f}mi ] - ({self.latitude}, {self.longitude})"
-        
-    def as_tuple(self):
-        return (self.latitude, self.longitude)
-
-    def details(self):
-        return f"""{self.eta_tz.strftime('%m/%d %H:00')} - "{self.nickname}"
-Temperature: {self.temperature_degf:.0f} deg F
-Precipitation: {self.precipitation_in:.1f}\"
-Wind/Gusts: {self.windspeed_mph:.0f}mph / {self.windgusts_mph:.0f}mph
-Visibility: {self.visiblity_mi:.1f}mi
-Coordinates: ({self.latitude}, {self.longitude})"""
-
-    def set_weather(self, temperature_degf, precipitation_in, visibility_mi, windspeed_mph, windgusts_mph):
-        self.temperature_degf = temperature_degf
-        self.precipitation_in = precipitation_in
-        self.visiblity_mi = visibility_mi
-        self.windspeed_mph = windspeed_mph
-        self.windgusts_mph = windgusts_mph
+addr1 = input('Origin >> ')
+if len(addr1) == 0:
+    exit()
+addr2 = input('Destination >> ')
+if len(addr2) == 0:
+    exit()
+dept_time = input('Departure time [ISO] (optional) >> ')
+print('Working...')
 
 
 # get geojson features for origin and destination
-addr1 = input('Origin >> ')
-addr2 = input('Destination >> ')
-print('Working...')
-
 geo = Geocoder(access_token=env.MAPBOX_ACCESS_TOKEN)
 resp = geo.forward(addr1).geojson()
 origin = resp['features'][0]
@@ -66,9 +36,13 @@ total_distance_miles = float(resp['features'][0]['properties']['distance']) * 0.
 
 
 # set up timezone info
-start_time = datetime.utcnow()
 tzname = tzwhere().tzNameAt(*waypoints[0].as_tuple())
 user_timezone = pytz.timezone(tzname)
+if len(dept_time) == 0:
+    start_time = datetime.utcnow()
+else:
+    start_time = datetime.fromisoformat(dept_time).astimezone(user_timezone)
+    start_time = start_time - start_time.utcoffset()
 
 
 # grab waypoints that are roughly 50 miles of driving apart
@@ -97,7 +71,7 @@ for w in weather_waypoints:
     eta_utc_fmt = w.eta_utc.strftime('%Y-%m-%dT%H:00')
     eta_tz_fmt = w.eta_tz.strftime('%H:00')
 
-    weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={coords[0]}&longitude={coords[1]}&temperature_unit=fahrenheit&windspeed_unit=mph&precipitation_unit=inch&hourly=temperature_2m,precipitation,visibility,windspeed_10m,windgusts_10m"
+    weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={coords[0]}&longitude={coords[1]}&temperature_unit=fahrenheit&windspeed_unit=mph&precipitation_unit=inch&hourly=temperature_2m,precipitation,weathercode,visibility,windspeed_10m,windgusts_10m"
     hourly = requests.get(weather_url).json()['hourly']
     try:
         index = hourly['time'].index(eta_utc_fmt)
@@ -106,13 +80,15 @@ for w in weather_waypoints:
         continue
     temperature = hourly['temperature_2m'][index]
     precipitation = hourly['precipitation'][index]
+    weathercode = hourly['weathercode'][index]
     visibility = float(hourly['visibility'][index]) / 5280
     wind_speed = hourly['windspeed_10m'][index]
     wind_gusts = hourly['windgusts_10m'][index]
-    w.set_weather(temperature, precipitation, visibility, wind_speed, wind_gusts)
+    w.set_weather(temperature, precipitation, weathercode, visibility, wind_speed, wind_gusts)
 
 
 # show forecast
 for w in weather_waypoints:
-    print(w.details())
-    print('---')
+    # print(w.details())
+    # print('---')
+    print(w)
