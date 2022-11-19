@@ -45,10 +45,14 @@ Coordinates: ({self.latitude}, {self.longitude})"""
 
 
 # get geojson features for origin and destination
+addr1 = input('Origin >> ')
+addr2 = input('Destination >> ')
+print('Working...')
+
 geo = Geocoder(access_token=env.MAPBOX_ACCESS_TOKEN)
-resp = geo.forward('6265 Sand Lake Vista Dr, Orlando, FL 32819').geojson()
+resp = geo.forward(addr1).geojson()
 origin = resp['features'][0]
-resp = geo.forward('614 Armandale St, Pittsburgh, PA 15212').geojson()
+resp = geo.forward(addr2).geojson()
 dest = resp['features'][0]
 
 
